@@ -1,10 +1,11 @@
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.options import Options
+from openpyxl import Workbook
 
 # create a webdriver and update it
 options = Options()
-options.headless = True
+# options.headless = True
 driver = webdriver.Chrome(ChromeDriverManager().install(), options=options,)
 
 # determine range of data
@@ -30,24 +31,59 @@ replacements = [[0, 0, 0, 0] for year in years]
 # we want the first 30 QB values each year, first 60 RB values, etc.
 values = [[[] for position in positions] for year in years]
 
+# setup excel workbook
+wb = Workbook()
+ws = wb.active
+
+nextStart = 1
+
 # web scrape replacement value for each position for each of the 10 years
 # web scrape points for each player up to replacement player for each of last 10 years
 for year in years:
-    for position in positions:
+    ws[f"A{nextStart}"] = year
+    startRow = nextStart + 2
+    currentRow = startRow
+    for posIdx, position in enumerate(positions):
+        if position == "QB":
+            col = "A"
+        elif position == "RB":
+            col = "B"
+        elif position == "WR":
+            col = "C"
+        else:
+            col = "D"
+        ws[f"{col}{currentRow}"] = position
+        currentRow += 1
         url = f"https://www.footballdb.com/fantasy-football/index.html?pos={position}&yr={year}&wk=all&key=b6406b7aea3872d5bb677f064673c57f"
         driver.get(url)
+
+        points = driver.find_elements_by_xpath("//tbody/tr/td[3]")
+
+        replacement = float(points[position_map[position]].text)
+        for i in range(position_map[position]):
+            points[i] = float(points[i].text) - replacement
+            ws[f"{col}{currentRow}"] = points[i]
+            currentRow += 1
+
+        if currentRow > nextStart:
+            nextStart = currentRow + 1
+
+        currentRow = startRow
 
         # add code to get the values up to the replacement value
         # determined by position_map
 
         # add code to get the replacement value
         # given by position_map[position] + 1
+wb.save("values.xlsx")
+driver.close()
+driver.quit()
 
 
-for yearIdx, year in enumerate(years):
-    for posIdx, position in enumerate(positions):
-        # subtracting replacement value from each players points to get value above replacement
-        values[yearIdx][posIdx][:] = [val - replacements[yearIdx][posIdx] for val in values[yearIdx][posIdx]]
+# for yearIdx, year in enumerate(years):
+#     for posIdx, position in enumerate(positions):
+#         # subtracting replacement value from each players points to get value above replacement
+#         values[yearIdx][posIdx][:] = [val - replacements[yearIdx][posIdx] for val in values[yearIdx][posIdx]]
 
 # loop through all values above replacement and sum up all values
 
